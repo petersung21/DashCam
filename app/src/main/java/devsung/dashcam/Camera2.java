@@ -11,12 +11,19 @@ import android.app.DialogFragment;
 import android.app.Fragment;
 import android.content.Context;
 import android.content.DialogInterface;
+import android.content.Intent;
 import android.content.res.Configuration;
 import android.graphics.Matrix;
 import android.graphics.RectF;
 import android.graphics.SurfaceTexture;
+import android.hardware.Sensor;
+import android.hardware.SensorEvent;
+import android.hardware.SensorEventListener;
+import android.hardware.SensorManager;
 import android.hardware.camera2.params.StreamConfigurationMap;
 import android.media.MediaRecorder;
+import android.net.Uri;
+import android.os.CountDownTimer;
 import android.os.Environment;
 import android.os.Handler;
 import android.os.HandlerThread;
@@ -45,6 +52,7 @@ import android.widget.Toast;
 import android.media.MediaScannerConnection;
 import android.media.MediaScannerConnection.MediaScannerConnectionClient;
 
+import java.io.Console;
 import java.io.File;
 import java.io.IOException;
 import java.text.DateFormat;
@@ -61,6 +69,35 @@ public class Camera2 extends Fragment implements View.OnClickListener {
 
     private static final SparseIntArray ORIENTATIONS = new SparseIntArray();
     private static final String TAG = "Camera2VideoFragment";
+    static private float[] gravity = new float[]{0,0,0};
+    static private float[] linear_acceleration = new float[]{0,0,0};
+    //I want to change this crashHappened boolean
+    public boolean crashHappened = false;
+
+
+    public void accelorometerEvent(SensorEvent sensorEvent){
+        final float alpha = 0.8f;
+
+        //Isolate force of gravity with low-pass filter
+        gravity[0] = alpha * gravity[0] + (1 - alpha) * sensorEvent.values[0];
+        gravity[1] = alpha * gravity[1] + (1 - alpha) * sensorEvent.values[1];
+        gravity[2] = alpha * gravity[2] + (1 - alpha) * sensorEvent.values[2];
+
+        //Remove the gravity contribution with high-pass filter
+        linear_acceleration[0] = sensorEvent.values[0] - gravity[0];
+        linear_acceleration[1] = sensorEvent.values[1] - gravity[1];
+        linear_acceleration[2] = sensorEvent.values[2] - gravity[2];
+
+        linear_acceleration[0] = (float) Math.sqrt(linear_acceleration[0] * linear_acceleration[0] +
+                linear_acceleration[1] * linear_acceleration[1] +
+                linear_acceleration[2] * linear_acceleration[2]);
+        if (Math.abs(linear_acceleration[0]) > 20){
+            Log.v(TAG,"This actually happened?");
+            //To True right over here. But it is not changing to true
+            crashHappened = true;
+        }
+    }
+
 
     static {
         ORIENTATIONS.append(Surface.ROTATION_0, 90);
@@ -341,7 +378,7 @@ public class Camera2 extends Fragment implements View.OnClickListener {
      * Start the camera preview.
      */
     private void startPreview() {
-        if (null == mCameraDevice || !mTextureView.isAvailable() || null == mPreviewSize) {
+        if (mCameraDevice == null || !mTextureView.isAvailable() || mPreviewSize == null) {
             return;
         }
         try {
@@ -451,6 +488,17 @@ public class Camera2 extends Fragment implements View.OnClickListener {
         Date date = new Date();
 
         File file = new File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES), dateFormat.format(date) + "DashCam.mp4");
+
+        Log.v(TAG,String.valueOf(crashHappened));
+
+        if (crashHappened==false){
+            file.delete();
+        }else{
+            Intent intent = new Intent(Intent.ACTION_MEDIA_SCANNER_SCAN_FILE);
+            intent.setData(Uri.fromFile(file));
+            context.sendBroadcast(intent);
+        }
+
         return file;
         //return new File(context.getExternalFilesDir(null), "video.mp4");
     }
@@ -461,6 +509,15 @@ public class Camera2 extends Fragment implements View.OnClickListener {
             mIsRecordingVideo = true;
 
             mMediaRecorder.start();
+
+//            new CountDownTimer(5000, 1000) {
+//                public void onTick(long millisUntilFinished) {
+//                }
+//
+//                public void onFinish() {
+//                    stopRecordingVideoTemp();
+//                }
+//            }.start();
         }catch (IllegalStateException ex){
             ex.printStackTrace();
         }
@@ -474,9 +531,21 @@ public class Camera2 extends Fragment implements View.OnClickListener {
         mMediaRecorder.reset();
         Activity activity = getActivity();
         if (activity != null){
-            Toast.makeText(activity, "Video saved: " + getVideoFile(activity), Toast.LENGTH_SHORT).show();
+            Toast.makeText(activity, "Video saved", Toast.LENGTH_SHORT).show();
         }
         startPreview();
+    }
+    private void stopRecordingVideoTemp(){
+        mIsRecordingVideo = false;
+
+        mMediaRecorder.stop();
+        mMediaRecorder.reset();
+        Activity activity = getActivity();
+        if (activity != null){
+            Toast.makeText(activity, "Video saved" + getVideoFile(activity), Toast.LENGTH_SHORT).show();
+        }
+        startPreview();
+        startRecordingVideo();
     }
 
 
