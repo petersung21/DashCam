@@ -71,8 +71,9 @@ public class Camera2 extends Fragment implements View.OnClickListener {
     private static final String TAG = "Camera2VideoFragment";
     static private float[] gravity = new float[]{0,0,0};
     static private float[] linear_acceleration = new float[]{0,0,0};
-    //I want to change this crashHappened boolean
-    public boolean crashHappened = false;
+
+    public static boolean crashHappened = false;
+    private static String fileNamern = "";
 
 
     public void accelorometerEvent(SensorEvent sensorEvent){
@@ -91,9 +92,7 @@ public class Camera2 extends Fragment implements View.OnClickListener {
         linear_acceleration[0] = (float) Math.sqrt(linear_acceleration[0] * linear_acceleration[0] +
                 linear_acceleration[1] * linear_acceleration[1] +
                 linear_acceleration[2] * linear_acceleration[2]);
-        if (Math.abs(linear_acceleration[0]) > 20){
-            Log.v(TAG,"This actually happened?");
-            //To True right over here. But it is not changing to true
+        if (Math.abs(linear_acceleration[0]) > 30){
             crashHappened = true;
         }
     }
@@ -269,6 +268,8 @@ public class Camera2 extends Fragment implements View.OnClickListener {
 
     @Override
     public void onPause(){
+        Activity activity = getActivity();
+        editVideoFile(activity);
         closeCamera();
         stopBackgroundThread();
         super.onPause();
@@ -288,7 +289,7 @@ public class Camera2 extends Fragment implements View.OnClickListener {
             case R.id.info:{
                 Activity activity = getActivity();
                 if (activity !=null){
-                    new AlertDialog.Builder(activity).setMessage("IT WORKS").setPositiveButton(android.R.string.ok,null).show();
+                    new AlertDialog.Builder(activity).setMessage("Dash-Cam").setPositiveButton(android.R.string.ok,null).show();
                 }
                 break;
             }
@@ -484,12 +485,24 @@ public class Camera2 extends Fragment implements View.OnClickListener {
     }
 
     private File getVideoFile (Context context){
-        DateFormat dateFormat = new SimpleDateFormat("yyyyMMddHHmm");
+        DateFormat dateFormat = new SimpleDateFormat("yyyyMMddHHmmss");
         Date date = new Date();
 
         File file = new File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES), dateFormat.format(date) + "DashCam.mp4");
 
-        Log.v(TAG,String.valueOf(crashHappened));
+        fileNamern = "/storage/emulated/0/Pictures/" + file.getName();
+
+
+        return file;
+        //return new File(context.getExternalFilesDir(null), "video.mp4");
+    }
+
+    private File editVideoFile (Context context){
+
+        File file = new File(fileNamern);
+
+
+
 
         if (crashHappened==false){
             file.delete();
@@ -497,6 +510,8 @@ public class Camera2 extends Fragment implements View.OnClickListener {
             Intent intent = new Intent(Intent.ACTION_MEDIA_SCANNER_SCAN_FILE);
             intent.setData(Uri.fromFile(file));
             context.sendBroadcast(intent);
+            crashHappened = false;
+            Toast.makeText(context, "Video saved", Toast.LENGTH_SHORT).show();
         }
 
         return file;
@@ -505,19 +520,22 @@ public class Camera2 extends Fragment implements View.OnClickListener {
 
     private void startRecordingVideo(){
         try{
+            crashHappened = false;
             mButtonVideo.setText("Stop");
             mIsRecordingVideo = true;
 
             mMediaRecorder.start();
 
-//            new CountDownTimer(5000, 1000) {
-//                public void onTick(long millisUntilFinished) {
-//                }
-//
-//                public void onFinish() {
-//                    stopRecordingVideoTemp();
-//                }
-//            }.start();
+            new CountDownTimer(300000, 1000) {
+                public void onTick(long millisUntilFinished) {
+                }
+
+                public void onFinish() {
+                    if (mIsRecordingVideo) {
+                        stopRecordingVideoTemp();
+                    }
+                }
+            }.start();
         }catch (IllegalStateException ex){
             ex.printStackTrace();
         }
@@ -530,21 +548,26 @@ public class Camera2 extends Fragment implements View.OnClickListener {
         mMediaRecorder.stop();
         mMediaRecorder.reset();
         Activity activity = getActivity();
+
         if (activity != null){
-            Toast.makeText(activity, "Video saved", Toast.LENGTH_SHORT).show();
+            editVideoFile(activity);
         }
+
         startPreview();
     }
     private void stopRecordingVideoTemp(){
-        mIsRecordingVideo = false;
 
         mMediaRecorder.stop();
         mMediaRecorder.reset();
+
         Activity activity = getActivity();
+
         if (activity != null){
-            Toast.makeText(activity, "Video saved" + getVideoFile(activity), Toast.LENGTH_SHORT).show();
+            editVideoFile(activity);
         }
+
         startPreview();
+
         startRecordingVideo();
     }
 
